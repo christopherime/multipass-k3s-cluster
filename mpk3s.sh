@@ -15,9 +15,6 @@ WORKER_NODE_HOSTNAME=k3s-worker-
 # Number of kubernetes nodes
 export WNNODES=2
 
-# local temp directory
-mkdir ./tmp
-
 # Test if multipass is installed and if not, install it
 snap services multipass | grep -q "^multipass"
 if [ $? -eq 0 ]; then
@@ -40,18 +37,24 @@ multipass exec $MASTER_NODE_HOSTNAME -- /bin/bash -c "curl -sfL https://get.k3s.
 multipass exec $MASTER_NODE_HOSTNAME -- /bin/bash -c "ip addr show ens3 | grep -Po 'inet \K[\d.]+'"
 
 export K3S_NODEIP_MASTER=`multipass exec $MASTER_NODE_HOSTNAME -- /bin/bash -c "ip addr show ens3 | grep -Po 'inet \K[\d.]+'"`
-echo $K3S_NODEIP_MASTER
+
+export K3S_NODE_URL="https://$K3S_NODEIP_MASTER:6443"
 
 # Export K3S cluster token on master to be used in worker to join the cluster
 export K3S_MASTER_TOKEN=`multipass exec $MASTER_NODE_HOSTNAME sudo cat /var/lib/rancher/k3s/server/node-token`
-echo $K3S_MASTER_TOKEN
 
-# Create K3S nodes corresponding to the number of nodes specified in NNODES
-for i in $(seq 1 $WNNODES); do
-    multipass launch \
-        --name $WORKER_NODE_HOSTNAME$i\
-        --cpus $WORKER_NODE_CPU \
-        --mem $WORKER_NODE_MEMORY \
-        --disk $WORKER_NODE_DISK
-    multipass exec $WORKER_NODE_HOSTNAME$i -- /bin/bash -c "curl -sfL https://get.k3s.io | K3S_TOKEN=${K3S_MASTER_TOKEN} K3S_URL=${K3S_NODEIP_MASTER} sh -"
-done
+# if Number of kubernetes nodes is greater than 0, then create worker nodes, else exit
+if [ $WNNODES -gt 0 ]; 
+    then
+        # Create K3S nodes corresponding to the number of nodes specified in NNODES
+        for i in $(seq 1 $WNNODES); do
+            multipass launch \
+                --name $WORKER_NODE_HOSTNAME$i\
+                --cpus $WORKER_NODE_CPU \
+                --mem $WORKER_NODE_MEMORY \
+                --disk $WORKER_NODE_DISK
+            multipass exec $WORKER_NODE_HOSTNAME$i -- /bin/bash -c "curl -sfL https://get.k3s.io | K3S_TOKEN=${K3S_MASTER_TOKEN} K3S_URL=${K3S_NODE_URL} sh -"
+        done
+    else
+        echo "No worker nodes to create"
+fi
