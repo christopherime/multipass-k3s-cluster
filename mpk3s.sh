@@ -57,4 +57,7 @@ if [ $WNNODES -gt 0 ];
         done
     else
         echo "No worker nodes to create"
+        echo "Node master url: $K3S_NODE_URL"
+        exit 0
 fi
+
